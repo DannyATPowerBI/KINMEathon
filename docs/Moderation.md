@@ -8,35 +8,21 @@ Die Starthistorie enthält 200 Entscheidungen. Zwölf neue Kombinationen werden 
 
 Bei `n` gültigen neuen Entscheidungen enthält die aktualisierte Historie `200 + n` Zeilen, bei vollständiger Prüfung 212. Die Starthistorie bleibt unverändert. Die aktualisierte Historie wird als eigene Tabelle im Flow angezeigt.
 
-## Fall 2: Databricks-Data-App
+## Fall 2: Wetterlogistik
 
-Dieser Fall ist für den Databricks-Zugriff reserviert. Das fachliche Szenario und die Tabellen werden noch bereitgestellt. Im Repository liegt dafür derzeit kein Workflow.
+Der neue Fall verbindet zwölf fiktive Lieferungen und drei Produktstammsätze mit einer 48-Stunden-Prognose von Open-Meteo. Schwerpunkte sind die Verarbeitung paralleler JSON-Listen, eindeutige Prognose-Slots und produktabhängige Regeln. [Detaillierte Aufgaben und Kontrollwerte](02_Wetterlogistik.md)
 
-## Fall 3: Große Datenmenge
+Der Referenzflow nutzt zunächst den Live-Zweig. Für einen Test die internen Wetterwerte mit dem zweiten Eingang von **GEMEINSAMER WETTER-EINGANG** verbinden. Erwartet werden **5 FREIGABE, 5 VERSCHIEBEN und 2 PRUEFEN**. Gleichheit mit einem Produktlimit ist zulässig; fehlende relevante Werte und unbekannte Produkte werden zuerst geprüft.
 
-Die vorbereitete Generatorkette besteht aus Table Creator, Top k Row Filter, Cross Joiner, String Manipulation, Rule Engine und Column Filter. Sie benötigt weder eine Eingabedatei noch Python-Nodes.
+Technische Fehler dürfen keine Lieferungen verschwinden lassen. Zwölf Lieferungen müssen zwölf Bewertungen ergeben. Die Live-Verteilung ist prognoseabhängig.
 
-Die Node **Anzahl Blöcke** wählt die Zahl der Blöcke:
+## Fall 3: Standortmonitor als Data App
 
-- **1.500** Blöcke mit jeweils **1.000** Vorgängen: **1.500.000** Zeilen.
-- **2** Blöcke mit jeweils **1.000** Vorgängen: **2.000** Testzeilen.
+Vier Standorte werden über aktuelle modellierte Luftqualitätswerte verglichen. Die App bietet eine veränderbare Standortauswahl und eine fiktive Beobachtungsschwelle. [Detaillierte Aufgaben und Kontrollwerte](03_Standortmonitor.md)
 
-Die Auswertung verwendet den Objektschlüssel `Schema + Objekt`. Zuerst wird die Stunde mit den meisten Zugriffen insgesamt bestimmt. Erst anschließend wird innerhalb dieser Stunde nach Programm, Schema und Objekt gruppiert.
+Der Referenzflow ist mit dem Live-Zweig verbunden. Für reproduzierbare Tests den Eingang der Komponente mit **INTERNE TESTDATEN** verbinden. Bei vier ausgewählten Standorten und Schwelle 60 ergeben sich **2 UNAUFFAELLIG, 1 BEOBACHTEN und 1 PRUEFEN**. Bei Schwelle 90 bleiben **3 UNAUFFAELLIG und 1 PRUEFEN**.
 
-| Kontrollwert im Vollmodus | Ergebnis |
-| --- | --- |
-| Summe der Objektgruppen | 1.500.000 |
-| Summe der Stundengruppen | 1.500.000 |
-| Spitzenstunde am 05.02.2026 | 09:00–10:00 |
-| Zugriffe in der Spitzenstunde | 322.000 |
-| Häufigstes Objekt | WERK / AUFTRAEGE |
-| Zugriffe auf das häufigste Objekt | 346.980 |
-| Häufigste Kombination innerhalb der Spitzenstunde | Fertigungsportal / WERK / AUFTRAEGE |
-| Zugriffe dieser Kombination in der Spitzenstunde | 160.508 |
-
-Für den Laufzeitvergleich drei Durchläufe mit identischer Generatorgröße auf demselben Gerät messen und den Median vergleichen. Vor jedem Lauf die Generator- und Auswertungsnodes zurücksetzen. Die Messung umfasst Datengenerierung und vollständige Ergebnisberechnung. Hardware, Einstellungen und Cache-Effekte dokumentieren. Eine Optimierung muss die fachlichen Ergebnisse beibehalten.
-
-Es gibt keinen vorgegebenen Beschleunigungsfaktor. Häufigkeit allein erklärt keine reale Wartezeit.
+Die App darf ausschließlich Einbeziehen und Warnschwelle_AQI zur Änderung freigeben. Fehlende Werte bleiben auch bei hoher Schwelle ungeklärt. Die Schwelle ist eine didaktische Einstellung und keine gesetzliche oder medizinische Bewertung.
 
 ## Fall 4: Störungsmeldungen
 
@@ -67,6 +53,6 @@ Zusatzaufgaben können bei Punktgleichheit entscheiden. Ein Reset erzeugt den de
 
 ## Prüfstand
 
-Die lokale Strukturprüfung kontrolliert alle sechs Workflow-Archive, ihre XML-Dateien, Node-Verbindungen und internen Grundtabellen. Die Kontrollwerte der großen Datenmenge werden unabhängig aus den gespeicherten Grundtabellen nachgerechnet. Die ZIP-Pakete werden gegen die Einzeldateien geprüft.
+Die lokale Prüfung kontrolliert alle acht Workflow-Archive, XML-Dateien, Node-Verbindungen, internen Testdaten, API-Konfigurationen und ZIP-Pakete. Fälle 1 und 4 wurden nicht verändert. Die neuen Kontrollwerte gelten ausschließlich für synthetische Testdaten.
 
-Ein nativer KNIME-Import, die Ausführung der Nodes und die interaktiven Ansichten wurden noch nicht in KNIME geprüft. Laufzeiten müssen auf den Teamgeräten gemessen werden.
+Ein nativer KNIME-Import, Node-Ausführung und die interaktiven Ansichten sind noch vor Ort zu prüfen. Direkte API-Aufrufe aus der Erstellungsumgebung werden mit HTTP 403 durch die Netzwerkfreigabe blockiert. Die Endpunkte und Parameter wurden anhand der offiziellen API-Dokumentation konfiguriert; Live-Antworten wurden hier nicht geprüft.
