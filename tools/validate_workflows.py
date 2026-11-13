@@ -3,15 +3,15 @@
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
 import hashlib
 import xml.etree.ElementTree as ET
 import zipfile
+from check_reference_graph import run
 
 ROOT = Path(__file__).resolve().parents[1]
 NS = {'k': 'http://www.knime.org/2008/09/XMLConfig'}
 TASKS = ('01_Merkmalspruefung_AUFGABE.knwf', '02_Wetterlogistik_AUFGABE.knwf',
-         '03_Standortmonitor_AUFGABE.knwf', '04_Stoerungsmeldungen_AUFGABE.knwf')
+         '03_Rechnungspruefung_AUFGABE.knwf', '04_Stoerungsmeldungen_AUFGABE.knwf')
 REFERENCES = tuple(name.replace('AUFGABE', 'REFERENZ') for name in TASKS)
 PRESERVED = {
     'workflows/01_Merkmalspruefung_AUFGABE.knwf': 'a19507e90bbbea5bcc4085a3959d966cc05487a776fa6b4503deb8be861febe7',
@@ -60,7 +60,7 @@ def decode_table(settings):
 
 def validate_workflow(path):
     tables, settings_by_factory = [], []
-    is_api = path.name.startswith(('02_', '03_'))
+    is_new = path.name.startswith(('02_', '03_'))
     with zipfile.ZipFile(path) as archive:
         assert archive.testzip() is None
         members = archive.namelist()
@@ -97,55 +97,29 @@ def validate_workflow(path):
                 assert not any(part in factory for part in (
                     'CSVTableReader', 'ExcelTableReader', 'FileReaderNodeFactory',
                     'ExcelTableWriter', 'SendMail', 'python3', 'SecretRetriever',
-                    'HubAuthentication', 'JDBC', 'DBReader'))
+                    'HubAuthentication', 'JDBC', 'DBReader', 'GETRequest', 'HTTPRequest', 'POSTRequest'))
                 settings_by_factory.append((factory, settings))
                 if factory.endswith('TableCreator2NodeFactory'):
                     tables.append(decode_table(settings))
-                if is_api and factory.endswith('GETRequestNodeFactory'):
-                    model = config(settings, 'model')
-                    assert value(model, 'Use constant URI') == 'false'
-                    assert value(model, 'URI column') == 'API_URL'
-                    assert value(model, 'None_enabled') == 'true'
-                    assert value(model, 'SSL trust all') == 'false'
-                    assert value(model, 'SSL ignore hostname errors') == 'false'
-                    assert value(model, 'Proxy_enabled') == 'false'
-                if is_api and factory.endswith('TableViewNodeFactory'):
+                if is_new and factory.endswith('TableViewNodeFactory'):
                     selected = config(config(config(settings, 'view'), 'displayedColumnsV2'), 'manualFilter')
                     assert array(selected, 'manuallySelected') or value(selected, 'includeUnknownColumns') == 'true'
             if name.count('/') == 1:
                 text = '\n'.join(value(a, 'text') for a in config(root, 'annotations'))
                 assert all(title in text for title in ('EXTRACT', 'TRANSFORM', 'LOAD', 'OHNE ZUSÄTZLICHE DATEIEN'))
-                if is_api:
-                    assert 'SYNTHET' in text.upper() and 'LIVE' in text
-        if path.name.startswith('03_') and '_REFERENZ' in path.name:
-            assert len(workflows) == 2
-            editor = next(ET.fromstring(archive.read(n)) for n in members
-                          if '/Table Editor' in n and n.endswith('/settings.xml'))
-            model = config(editor, 'model')
-            editable = config(model, 'editableColumnsFilter')
-            assert array(editable, 'included_names') == ['Einbeziehen', 'Warnschwelle_AQI']
-            assert value(editable, 'enforce_option') == 'EnforceInclusion'
-            assert array(config(model, 'dropdownColumnFilter'), 'included_names') == []
-            settings_path = next(n for n in members if '/Pruefoberflaeche' in n and n.count('/') == 2 and n.endswith('/settings.xml'))
-            assert 'Ansicht aktualisieren' in '\n'.join(archive.read(n).decode() for n in members if n.endswith('.xml'))
-            assert value(ET.fromstring(archive.read(settings_path)), 'layoutJSON')
+                if is_new:
+                    assert 'SYNTHET' in text.upper()
     return tables, settings_by_factory
 
 
 def validate_weather(tables, settings, reference):
-    request = next(t for t in tables if 'API_URL' in t[0])
-    assert len(request) == 1
-    uri = urlparse(request[0]['API_URL']); query = parse_qs(uri.query)
-    assert uri.scheme == 'https' and uri.netloc == 'api.open-meteo.com'
-    assert query['forecast_hours'] == ['48']
-    assert set(query['hourly'][0].split(',')) == {'temperature_2m', 'relative_humidity_2m'}
     ships = next(t for t in tables if 'Liefer_ID' in t[0])
     products = {r['Produkt_ID']: r for r in next(t for t in tables if 'Max_Temperatur_C' in t[0])}
     weather = {r['Plan_Slot']: r for r in next(t for t in tables if 'Temperatur_C' in t[0])}
     assert len(ships) == 12 and len(weather) == 48 and set(weather) == set(range(1, 49))
     assert len({r['Liefer_ID'] for r in ships}) == 12
     for row in weather.values():
-        assert row['Datenquelle'] == 'SYNTHETISCHER TEST'
+        assert row['Datenquelle'] == 'SYNTHETISCH'
         datetime.fromisoformat(row['Zeitpunkt'])
     def status(ship):
         p = products.get(ship['Produkt_ID'])
@@ -162,49 +136,65 @@ def validate_weather(tables, settings, reference):
     for label, ids in expected.items():
         assert {key for key, result in got.items() if result == label} == ids
     if reference:
-        jp = next(config(s, 'model') for f, s in settings if f.endswith('JSONPathNodeFactory'))
-        assert array(jp, 'newColumnName') == ['Zeitpunkt', 'Temperatur_C', 'Feuchte_pct']
-        assert array(jp, 'result.is.list') == ['true'] * 3
-        rank = next(config(s, 'model') for f, s in settings if f.endswith('RankNodeFactory'))
-        assert value(rank, 'RankOutFieldName') == 'Plan_Slot' and value(rank, 'rankDataType') == 'INT'
-        # List values remain aligned; the native Ungroup is configured not to drop missing values.
-        ug = next(config(s, 'model') for f, s in settings if f.endswith('UngroupNodeFactory'))
-        assert value(ug, 'skipMissingValues') == 'false'
         rule = next(config(s, 'model') for f, s in settings if f.endswith('RuleEngineNodeFactory') and value(config(s, 'model'), 'new-column-name') == 'Lieferstatus')
         rules = array(rule, 'rules')
         assert rules[0] == 'MISSING $Produkt$ => "PRUEFEN"'
         assert rules.index('NOT MISSING $Max_Feuchte_pct$ AND MISSING $Feuchte_pct$ => "PRUEFEN"') < rules.index('NOT MISSING $Max_Temperatur_C$ AND $Temperatur_C$ > $Max_Temperatur_C$ => "VERSCHIEBEN"')
 
 
-def validate_air(tables, settings, reference):
-    locations = next(t for t in tables if 'API_URL' in t[0])
-    fixture = next(t for t in tables if 'AQI' in t[0])
-    assert len(locations) == len(fixture) == 4
-    for row in locations:
-        uri = urlparse(row['API_URL']); query = parse_qs(uri.query)
-        assert uri.scheme == 'https' and uri.netloc == 'air-quality-api.open-meteo.com'
-        assert set(query['current'][0].split(',')) == {'european_aqi', 'pm10', 'pm2_5'}
-    def counts(rows):
-        result = Counter()
-        for r in rows:
-            if r['Einbeziehen'] == 0:
-                continue
-            missing = r['Einbeziehen'] not in (0, 1) or r['Warnschwelle_AQI'] is None or r['Warnschwelle_AQI'] < 0 or not r['Prognosezeit']
-            missing |= any(r[k] is None or r[k] < 0 for k in ['AQI', 'PM10', 'PM2_5'])
-            state = 'PRUEFEN' if missing else 'BEOBACHTEN' if r['AQI'] > r['Warnschwelle_AQI'] else 'UNAUFFAELLIG'
-            result[state] += 1
-        return dict(result)
-    assert counts(fixture) == {'UNAUFFAELLIG': 2, 'BEOBACHTEN': 1, 'PRUEFEN': 1}
-    assert counts([dict(r, Einbeziehen=0 if r['Standort_ID'] == 'AUG' else 1) for r in fixture]) == {'UNAUFFAELLIG': 2, 'PRUEFEN': 1}
-    assert counts([dict(r, Warnschwelle_AQI=90) for r in fixture]) == {'UNAUFFAELLIG': 3, 'PRUEFEN': 1}
-    assert counts([dict(fixture[0], AQI=-1)]) == {'PRUEFEN': 1}
+INVOICE_EXPECTED = {
+    'OK': {'I01', 'I02', 'I03', 'I06', 'I14', 'I18'},
+    'DUPLIKATVERDACHT': {'I04', 'I05'},
+    'WARENEINGANG_UEBERSCHRITTEN': {'I07', 'I08'},
+    'PREISABWEICHUNG': {'I09'}, 'RECHENFEHLER': {'I10'},
+    'BESTELLUNG_FEHLT': {'I11'}, 'WARENEINGANG_FEHLT': {'I12'},
+    'LIEFERANT_ABWEICHEND': {'I13'}, 'DATEN_UNGUELTIG': {'I15', 'I19'},
+    'DATEN_UNVOLLSTAENDIG': {'I16', 'I20'}, 'BESTELLMENGE_UEBERSCHRITTEN': {'I17'},
+}
+
+
+def validate_invoice(tables, settings, reference):
+    invoices = next(t for t in tables if 'Rechnungsposition_ID' in t[0])
+    orders = next(t for t in tables if 'Bestellpreis_Cent' in t[0])
+    receipts = next(t for t in tables if 'Wareneingang_ID' in t[0])
+    assert (len(invoices), len(orders), len(receipts)) == (20, 15, 17)
+    assert len({r['Rechnungsposition_ID'] for r in invoices}) == 20
+    assert len({r['Beleg_ID'] for r in invoices}) == 19
+    assert len({(r['Bestell_ID'], r['Bestellposition']) for r in orders}) == 15
+    assert len({r['Wareneingang_ID'] for r in receipts}) == 17
+    assert {r['Rechnungsposition_ID'] for r in invoices} == set().union(*INVOICE_EXPECTED.values())
     if reference:
-        jp = next(config(s, 'model') for f, s in settings if f.endswith('JSONPathNodeFactory'))
-        assert array(jp, 'newColumnName') == ['Prognosezeit', 'AQI', 'PM10', 'PM2_5']
-        assert array(jp, 'result.is.list') == ['false'] * 4
-        joins = [config(s, 'model') for f, s in settings if f.endswith('Joiner3NodeFactory')]
-        assert len(joins) == 1 and value(joins[0], 'includeLeftUnmatchedInOutput') == 'true'
-        assert any(f.endswith('ColorManager2NodeFactory') for f, _ in settings)
+        assert sum(f.endswith('Joiner3NodeFactory') for f, _ in settings) == 4
+        formulas = [config(s, 'model') for f, s in settings if f.endswith('JEPNodeFactory')]
+        assert {value(m, 'replaced_column') for m in formulas} == {
+            'Menge_nach_Stapel', 'Rechenabweichung_Cent', 'Preisabweichung_mal100', 'Preistoleranz_mal2'}
+
+
+def validate_reference_graph(path):
+    outputs = list(run(path, decode_table).values())
+    if path.name.startswith('02_'):
+        rows = next(t for t in outputs if t and 'Lieferstatus' in t[0])
+        assert len(rows) == 12
+        expected = {'FREIGABE': {'L01', 'L03', 'L09', 'L10', 'L12'},
+                    'VERSCHIEBEN': {'L02', 'L04', 'L06', 'L07', 'L08'}, 'PRUEFEN': {'L05', 'L11'}}
+        for label, ids in expected.items():
+            assert {r['Liefer_ID'] for r in rows if r['Lieferstatus'] == label} == ids
+        assert any(len(t) == 7 and {r['Lieferstatus'] for r in t} == {'VERSCHIEBEN', 'PRUEFEN'}
+                   for t in outputs if t and 'Lieferstatus' in t[0])
+    else:
+        rows = next(t for t in outputs if t and 'Pruefstatus' in t[0])
+        assert len(rows) == 20
+        assert Counter(r['Pruefstatus'] for r in rows) == {'FREIGABE': 6, 'SPERREN': 7, 'PRUEFEN': 7}
+        for reason, ids in INVOICE_EXPECTED.items():
+            assert {r['Rechnungsposition_ID'] for r in rows if r['Pruefgrund'] == reason} == ids, reason
+        by_id = {r['Rechnungsposition_ID']: r for r in rows}
+        assert by_id['I06']['Aktuelle_Stapelmenge'] == 80
+        assert by_id['I07']['Menge_nach_Stapel'] == by_id['I08']['Menge_nach_Stapel'] == 85
+        assert by_id['I07']['Wareneingang_Gesamt'] == 80
+        assert by_id['I14']['Rechenabweichung_Cent'] == 1
+        assert by_id['I10']['Rechenabweichung_Cent'] == 2
+        assert any(len(t) == 14 and {r['Pruefstatus'] for r in t} == {'SPERREN', 'PRUEFEN'}
+                   for t in outputs if t and 'Pruefstatus' in t[0])
 
 
 def bundle(filename, folder, names):
@@ -225,12 +215,14 @@ def main():
             if name.startswith('02_'):
                 validate_weather(tables, settings, '_REFERENZ' in name)
             if name.startswith('03_'):
-                validate_air(tables, settings, '_REFERENZ' in name)
+                validate_invoice(tables, settings, '_REFERENZ' in name)
+            if name.startswith(('02_', '03_')) and '_REFERENZ' in name:
+                validate_reference_graph(path)
             print('OK', path.relative_to(ROOT))
     bundle('Vier_Uebungsflows.zip', 'workflows', TASKS)
     bundle('Moderation_vier_Referenzflows.zip', 'moderation', REFERENCES)
-    print('OK: cases 1/4 unchanged; eight native archives; graphs, API configuration, synthetic controls, app parameters and ZIP contents.')
-    print('Not tested here: native KNIME execution/UI and live API responses (environment network restriction).')
+    print('OK: cases 1/4 unchanged; eight native archives; graphs, generated data, invoice/weather controls, modeled reference results and ZIP contents.')
+    print('Not tested here: native KNIME import, node execution and UI. The local model is not KNIME.')
 
 
 if __name__ == '__main__':

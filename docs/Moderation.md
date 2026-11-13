@@ -10,19 +10,19 @@ Bei `n` gültigen neuen Entscheidungen enthält die aktualisierte Historie `200 
 
 ## Fall 2: Wetterlogistik
 
-Der neue Fall verbindet zwölf fiktive Lieferungen und drei Produktstammsätze mit einer 48-Stunden-Prognose von Open-Meteo. Schwerpunkte sind die Verarbeitung paralleler JSON-Listen, eindeutige Prognose-Slots und produktabhängige Regeln. [Detaillierte Aufgaben und Kontrollwerte](02_Wetterlogistik.md)
+Zwölf Lieferungen werden mit drei Produktstammsätzen und 48 im Flow erzeugten Wetterstunden verbunden. Schwerpunkte sind Left Joins, produktabhängige Regeln, Datenlücken und Dispoliste. [Detaillierte Aufgaben und Kontrollwerte](02_Wetterlogistik.md)
 
-Der Referenzflow nutzt zunächst den Live-Zweig. Für einen Test die internen Wetterwerte mit dem zweiten Eingang von **GEMEINSAMER WETTER-EINGANG** verbinden. Erwartet werden **5 FREIGABE, 5 VERSCHIEBEN und 2 PRUEFEN**. Gleichheit mit einem Produktlimit ist zulässig; fehlende relevante Werte und unbekannte Produkte werden zuerst geprüft.
+Erwartet werden **5 FREIGABE, 5 VERSCHIEBEN und 2 PRUEFEN**. Gleichheit mit einem Produktlimit ist zulässig. Fehlende relevante Werte und unbekannte Produkte haben Vorrang vor einer bekannten Überschreitung. Alle zwölf Lieferungen müssen genau einmal erhalten bleiben.
 
-Technische Fehler dürfen keine Lieferungen verschwinden lassen. Zwölf Lieferungen müssen zwölf Bewertungen ergeben. Die Live-Verteilung ist prognoseabhängig.
+## Fall 3: Rechnungsprüfung
 
-## Fall 3: Standortmonitor als Data App
+20 Rechnungspositionen aus 19 eingegangenen Belegen werden mit 15 Bestellpositionen und 17 Wareneingängen abgeglichen. Alle Daten entstehen im Flow. [Detaillierte Aufgaben und Kontrollwerte](03_Rechnungspruefung.md)
 
-Vier Standorte werden über aktuelle modellierte Luftqualitätswerte verglichen. Die App bietet eine veränderbare Standortauswahl und eine fiktive Beobachtungsschwelle. [Detaillierte Aufgaben und Kontrollwerte](03_Standortmonitor.md)
+Erwartet werden **6 FREIGABE, 7 SPERREN und 7 PRUEFEN**; die Klärungsliste enthält 14 Positionen. Die Auswertung zählt Positionen. Eine Freigabeempfehlung auf Positionsebene ist noch keine Freigabe des gesamten Belegs.
 
-Der Referenzflow ist mit dem Live-Zweig verbunden. Für reproduzierbare Tests den Eingang der Komponente mit **INTERNE TESTDATEN** verbinden. Bei vier ausgewählten Standorten und Schwelle 60 ergeben sich **2 UNAUFFAELLIG, 1 BEOBACHTEN und 1 PRUEFEN**. Bei Schwelle 90 bleiben **3 UNAUFFAELLIG und 1 PRUEFEN**.
+Die häufigsten Stolperstellen: Positionen desselben Belegs irrtümlich als Duplikate zählen; Wareneingänge vor ihrer Aggregation verbinden; bereits berechnete Mengen vergessen; mehrere aktuelle Rechnungen einzeln statt kumuliert prüfen; Duplikate in den aktuellen Mengenstapel aufnehmen. I03 und I14 testen exakt die erlaubten Preis- und Rechentoleranzen. Die im Flow angegebene Reihenfolge bestimmt den ersten Prüfgrund.
 
-Die App darf ausschließlich Einbeziehen und Warnschwelle_AQI zur Änderung freigeben. Fehlende Werte bleiben auch bei hoher Schwelle ungeklärt. Die Schwelle ist eine didaktische Einstellung und keine gesetzliche oder medizinische Bewertung.
+Die optionale manuelle Klärungsansicht und der Belegstatus gehören zur Vertiefung. Für die Kernaufgabe reichen Prüfliste, Klärungsliste und Zählung nach Status/Grund.
 
 ## Fall 4: Störungsmeldungen
 
@@ -53,6 +53,6 @@ Zusatzaufgaben können bei Punktgleichheit entscheiden. Ein Reset erzeugt den de
 
 ## Prüfstand
 
-Die lokale Prüfung kontrolliert alle acht Workflow-Archive, XML-Dateien, Node-Verbindungen, internen Testdaten, API-Konfigurationen und ZIP-Pakete. Fälle 1 und 4 wurden nicht verändert. Die neuen Kontrollwerte gelten ausschließlich für synthetische Testdaten.
+Die lokale Prüfung kontrolliert alle acht Workflow-Archive, XML-Dateien, Node-Verbindungen, intern erzeugten Daten und ZIP-Pakete. Sie rechnet die neuen Referenzgraphen für Fall 2 und 3 mit einem begrenzten lokalen Prüfmodell nach. Fälle 1 und 4 sind bytegleich erhalten geblieben. Alle Fälle verwenden ausschließlich synthetische Daten aus ihren Table Creators.
 
-Ein nativer KNIME-Import, Node-Ausführung und die interaktiven Ansichten sind noch vor Ort zu prüfen. Direkte API-Aufrufe aus der Erstellungsumgebung werden mit HTTP 403 durch die Netzwerkfreigabe blockiert. Die Endpunkte und Parameter wurden anhand der offiziellen API-Dokumentation konfiguriert; Live-Antworten wurden hier nicht geprüft.
+Ein nativer KNIME-Import, Node-Ausführung und die interaktiven Ansichten sind noch auf den Teamgeräten zu prüfen. Das lokale Prüfmodell ersetzt KNIME nicht.
