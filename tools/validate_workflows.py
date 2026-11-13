@@ -11,9 +11,11 @@ from check_reference_graph import run
 ROOT = Path(__file__).resolve().parents[1]
 NS = {'k': 'http://www.knime.org/2008/09/XMLConfig'}
 TASKS = ('01_Merkmalspruefung_AUFGABE.knwf', '02_Wetterlogistik_AUFGABE.knwf',
-         '03_Rechnungspruefung_AUFGABE.knwf', '04_Stoerungsmeldungen_AUFGABE.knwf')
+         '03_Fertigungsplanung_AUFGABE.knwf', '04_Stoerungsmeldungen_AUFGABE.knwf')
 REFERENCES = tuple(name.replace('AUFGABE', 'REFERENZ') for name in TASKS)
 PRESERVED = {
+    'workflows/02_Wetterlogistik_AUFGABE.knwf': 'edd2c6f79b0712cbc12606cfd26b87908854eebc37715b01f4dcad020ce449ff',
+    'moderation/02_Wetterlogistik_REFERENZ.knwf': 'd8fef62bfdd16a58bf042aed658ca7d9d2006ded2caeeb2180202a93d0275588',
     'workflows/01_Merkmalspruefung_AUFGABE.knwf': 'a19507e90bbbea5bcc4085a3959d966cc05487a776fa6b4503deb8be861febe7',
     'workflows/04_Stoerungsmeldungen_AUFGABE.knwf': '8ffff90c7dacf84ac829da81e461e2144048d9df3f31d613bd18a536fa888080',
     'moderation/01_Merkmalspruefung_REFERENZ.knwf': '5c9e9bb923cc8b71d2e7b2e6ad9c4d24ae3e61aa797d19ad923bf27b59ffe2a3',
@@ -142,32 +144,22 @@ def validate_weather(tables, settings, reference):
         assert rules.index('NOT MISSING $Max_Feuchte_pct$ AND MISSING $Feuchte_pct$ => "PRUEFEN"') < rules.index('NOT MISSING $Max_Temperatur_C$ AND $Temperatur_C$ > $Max_Temperatur_C$ => "VERSCHIEBEN"')
 
 
-INVOICE_EXPECTED = {
-    'OK': {'I01', 'I02', 'I03', 'I06', 'I14', 'I18'},
-    'DUPLIKATVERDACHT': {'I04', 'I05'},
-    'WARENEINGANG_UEBERSCHRITTEN': {'I07', 'I08'},
-    'PREISABWEICHUNG': {'I09'}, 'RECHENFEHLER': {'I10'},
-    'BESTELLUNG_FEHLT': {'I11'}, 'WARENEINGANG_FEHLT': {'I12'},
-    'LIEFERANT_ABWEICHEND': {'I13'}, 'DATEN_UNGUELTIG': {'I15', 'I19'},
-    'DATEN_UNVOLLSTAENDIG': {'I16', 'I20'}, 'BESTELLMENGE_UEBERSCHRITTEN': {'I17'},
-}
-
-
-def validate_invoice(tables, settings, reference):
-    invoices = next(t for t in tables if 'Rechnungsposition_ID' in t[0])
-    orders = next(t for t in tables if 'Bestellpreis_Cent' in t[0])
-    receipts = next(t for t in tables if 'Wareneingang_ID' in t[0])
-    assert (len(invoices), len(orders), len(receipts)) == (20, 15, 17)
-    assert len({r['Rechnungsposition_ID'] for r in invoices}) == 20
-    assert len({r['Beleg_ID'] for r in invoices}) == 19
-    assert len({(r['Bestell_ID'], r['Bestellposition']) for r in orders}) == 15
-    assert len({r['Wareneingang_ID'] for r in receipts}) == 17
-    assert {r['Rechnungsposition_ID'] for r in invoices} == set().union(*INVOICE_EXPECTED.values())
+def validate_plan(tables, settings, reference):
+    jobs = next(t for t in tables if 'Auftrag_ID' in t[0])
+    machines = next(t for t in tables if 'Schicht_Min' in t[0])
+    assert len(jobs) == 12 and len(machines) == 3
+    assert len({r['Auftrag_ID'] for r in jobs}) == 12
+    assert len({r['Maschine_ID'] for r in machines}) == 3
+    assert Counter(r['Maschine_ID'] for r in jobs) == {'M1': 4, 'M2': 4, 'M3': 4}
+    assert all(r['Schicht_Min'] == 480 for r in machines)
+    renderer = next(config(s, 'model') for f, s in settings if f.endswith('generic3.GenericJSViewNodeFactory'))
+    assert value(renderer, 'jsCode') == (ROOT / 'tools/plantafel.js').read_text()
+    assert value(renderer, 'cssCode') == (ROOT / 'tools/plantafel.css').read_text()
+    assert array(renderer, 'dependencies') == []
+    assert value(renderer, 'maxRows') == '1000'
     if reference:
-        assert sum(f.endswith('Joiner3NodeFactory') for f, _ in settings) == 4
-        formulas = [config(s, 'model') for f, s in settings if f.endswith('JEPNodeFactory')]
-        assert {value(m, 'replaced_column') for m in formulas} == {
-            'Menge_nach_Stapel', 'Rechenabweichung_Cent', 'Preisabweichung_mal100', 'Preistoleranz_mal2'}
+        assert sum(f.endswith('Joiner3NodeFactory') for f, _ in settings) == 1
+        assert sum(f.endswith('JEPNodeFactory') for f, _ in settings) == 3
 
 
 def validate_reference_graph(path):
@@ -182,19 +174,32 @@ def validate_reference_graph(path):
         assert any(len(t) == 7 and {r['Lieferstatus'] for r in t} == {'VERSCHIEBEN', 'PRUEFEN'}
                    for t in outputs if t and 'Lieferstatus' in t[0])
     else:
-        rows = next(t for t in outputs if t and 'Pruefstatus' in t[0])
-        assert len(rows) == 20
-        assert Counter(r['Pruefstatus'] for r in rows) == {'FREIGABE': 6, 'SPERREN': 7, 'PRUEFEN': 7}
-        for reason, ids in INVOICE_EXPECTED.items():
-            assert {r['Rechnungsposition_ID'] for r in rows if r['Pruefgrund'] == reason} == ids, reason
-        by_id = {r['Rechnungsposition_ID']: r for r in rows}
-        assert by_id['I06']['Aktuelle_Stapelmenge'] == 80
-        assert by_id['I07']['Menge_nach_Stapel'] == by_id['I08']['Menge_nach_Stapel'] == 85
-        assert by_id['I07']['Wareneingang_Gesamt'] == 80
-        assert by_id['I14']['Rechenabweichung_Cent'] == 1
-        assert by_id['I10']['Rechenabweichung_Cent'] == 2
-        assert any(len(t) == 14 and {r['Pruefstatus'] for r in t} == {'SPERREN', 'PRUEFEN'}
-                   for t in outputs if t and 'Pruefstatus' in t[0])
+        rows = next(t for t in outputs if t and 'Ende_Min' in t[0])
+        assert len(rows) == 12
+        by_id = {r['Auftrag_ID']: r for r in rows}
+        assert by_id['A01']['Dauer_Min'] == 90
+        assert by_id['A04']['Dauer_Min'] == 105
+        assert by_id['A04']['Start_Min'] == 405 and by_id['A04']['Ende_Min'] == 510
+        assert {r['Auftrag_ID'] for r in rows if r['Ende_Min'] > r['Schicht_Min']} == {'A04'}
+        for machine in ('M1', 'M2', 'M3'):
+            own = sorted((r for r in rows if r['Maschine_ID'] == machine), key=lambda r: r['Start_Min'])
+            assert all(a['Ende_Min'] <= b['Start_Min'] for a, b in zip(own, own[1:]))
+        loads = next(t for t in outputs if t and 'Arbeitslast_pct' in t[0])
+        assert len(loads) == 3
+        expected = {'M1': 465, 'M2': 360, 'M3': 250}
+        for r in loads:
+            assert r['Summe_Dauer_Min'] == expected[r['Maschine_ID']]
+            assert r['Anzahl_Auftraege'] == 4
+            assert abs(r['Arbeitslast_pct'] - expected[r['Maschine_ID']] / 480 * 100) < 1e-9
+        # A simple feasible alternative closes only the three M1 gaps.
+        improved = {'A02': 90, 'A03': 225, 'A04': 360}
+        modified = [dict(r, Start_Min=improved.get(r['Auftrag_ID'], r['Start_Min'])) for r in rows]
+        for r in modified:
+            r['Ende_Min'] = r['Start_Min'] + r['Dauer_Min']
+            assert r['Ende_Min'] <= r['Schicht_Min']
+        for machine in ('M1', 'M2', 'M3'):
+            own = sorted((r for r in modified if r['Maschine_ID'] == machine), key=lambda r: r['Start_Min'])
+            assert all(a['Ende_Min'] <= b['Start_Min'] for a, b in zip(own, own[1:]))
 
 
 def bundle(filename, folder, names):
@@ -215,13 +220,13 @@ def main():
             if name.startswith('02_'):
                 validate_weather(tables, settings, '_REFERENZ' in name)
             if name.startswith('03_'):
-                validate_invoice(tables, settings, '_REFERENZ' in name)
+                validate_plan(tables, settings, '_REFERENZ' in name)
             if name.startswith(('02_', '03_')) and '_REFERENZ' in name:
                 validate_reference_graph(path)
             print('OK', path.relative_to(ROOT))
     bundle('Vier_Uebungsflows.zip', 'workflows', TASKS)
     bundle('Moderation_vier_Referenzflows.zip', 'moderation', REFERENCES)
-    print('OK: cases 1/4 unchanged; eight native archives; graphs, generated data, invoice/weather controls, modeled reference results and ZIP contents.')
+    print('OK: cases 1/2/4 unchanged; eight native archives; graphs, generated data, planning/weather controls, modeled reference results and ZIP contents.')
     print('Not tested here: native KNIME import, node execution and UI. The local model is not KNIME.')
 
 

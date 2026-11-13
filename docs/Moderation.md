@@ -14,15 +14,15 @@ Zwölf Lieferungen werden mit drei Produktstammsätzen und 48 im Flow erzeugten 
 
 Erwartet werden **5 FREIGABE, 5 VERSCHIEBEN und 2 PRUEFEN**. Gleichheit mit einem Produktlimit ist zulässig. Fehlende relevante Werte und unbekannte Produkte haben Vorrang vor einer bekannten Überschreitung. Alle zwölf Lieferungen müssen genau einmal erhalten bleiben.
 
-## Fall 3: Rechnungsprüfung
+## Fall 3: Fertigungsplanung mit grafischer Plantafel
 
-20 Rechnungspositionen aus 19 eingegangenen Belegen werden mit 15 Bestellpositionen und 17 Wareneingängen abgeglichen. Alle Daten entstehen im Flow. [Detaillierte Aufgaben und Kontrollwerte](03_Rechnungspruefung.md)
+Zwölf Aufträge und drei Montagezellen entstehen im Flow. Die Kernverarbeitung besteht aus einem Left Join und zwei Formeln für Dauer und Endzeit. Die vorbereitete Plantafel liefert ein Gantt-Diagramm und exportiert SVG oder HTML; das Team ergänzt eine Arbeitslastübersicht und verbessert den Plan. [Aufgaben, Vorschau und Kontrollwerte](03_Fertigungsplanung.md)
 
-Erwartet werden **6 FREIGABE, 7 SPERREN und 7 PRUEFEN**; die Klärungsliste enthält 14 Positionen. Die Auswertung zählt Positionen. Eine Freigabeempfehlung auf Positionsebene ist noch keine Freigabe des gesamten Belegs.
+Belegungsdauer: **M1 465 min, M2 360 min, M3 250 min**, jeweils vier Aufträge. Arbeitslast: rund **96,9 %, 75,0 %, 52,1 %**. A04 dauert 105 Minuten und endet als einziger Auftrag im Ausgangsplan nach Schichtende: 14:30. Es gibt keine Überschneidungen.
 
-Die häufigsten Stolperstellen: Positionen desselben Belegs irrtümlich als Duplikate zählen; Wareneingänge vor ihrer Aggregation verbinden; bereits berechnete Mengen vergessen; mehrere aktuelle Rechnungen einzeln statt kumuliert prüfen; Duplikate in den aktuellen Mengenstapel aufnehmen. I03 und I14 testen exakt die erlaubten Preis- und Rechentoleranzen. Die im Flow angegebene Reihenfolge bestimmt den ersten Prüfgrund.
+Eine einfache Verbesserung schließt nur die drei Lücken auf M1: Start_Min für A02 = 90, A03 = 225 und A04 = 360. Dann endet A04 um 13:45. Alle Aufträge passen in die Schicht, ohne Mengen, Dauer oder Maschinenzuordnung zu ändern. Die Arbeitslast bleibt gleich. Andere überschneidungsfreie Verbesserungen sind ebenfalls gültig.
 
-Die optionale manuelle Klärungsansicht und der Belegstatus gehören zur Vertiefung. Für die Kernaufgabe reichen Prüfliste, Klärungsliste und Zählung nach Status/Grund.
+Wichtig für die Bewertung sind verständliche Zeitachsen, korrekte Balken, ein gespeicherter Ausgangsplan und ein begründeter Verbesserungsvorschlag. Ein automatischer Optimierungsalgorithmus oder eigene JavaScript-Programmierung wird nicht vorausgesetzt.
 
 ## Fall 4: Störungsmeldungen
 
@@ -53,6 +53,6 @@ Zusatzaufgaben können bei Punktgleichheit entscheiden. Ein Reset erzeugt den de
 
 ## Prüfstand
 
-Die lokale Prüfung kontrolliert alle acht Workflow-Archive, XML-Dateien, Node-Verbindungen, intern erzeugten Daten und ZIP-Pakete. Sie rechnet die neuen Referenzgraphen für Fall 2 und 3 mit einem begrenzten lokalen Prüfmodell nach. Fälle 1 und 4 sind bytegleich erhalten geblieben. Alle Fälle verwenden ausschließlich synthetische Daten aus ihren Table Creators.
+Die lokale Prüfung kontrolliert alle acht Workflow-Archive, XML-Dateien, Node-Verbindungen, intern erzeugten Daten und ZIP-Pakete. Sie rechnet die neuen Referenzgraphen für Fall 2 und 3 mit einem begrenzten lokalen Prüfmodell nach. Fälle 1, 2 und 4 sind bytegleich erhalten geblieben. Alle Fälle verwenden ausschließlich synthetische Daten aus ihren Table Creators.
 
-Ein nativer KNIME-Import, Node-Ausführung und die interaktiven Ansichten sind noch auf den Teamgeräten zu prüfen. Das lokale Prüfmodell ersetzt KNIME nicht.
+Die eingebettete Plantafel wurde separat in Chromium geprüft, einschließlich SVG-/HTML-Export, verbessertem Plan und Aufgabenhinweis. Ein nativer KNIME-Import, Node-Ausführung und die Einbettung der interaktiven Ansichten sind noch auf den Teamgeräten zu prüfen. Die Browserprüfung und das lokale Prüfmodell ersetzen KNIME nicht.

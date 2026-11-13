@@ -57,7 +57,7 @@ def expression(text, row):
             if left is None or right is None:
                 return None
             return {ast.Add: operator.add, ast.Sub: operator.sub,
-                    ast.Mult: operator.mul}[type(node.op)](left, right)
+                    ast.Mult: operator.mul, ast.Div: operator.truediv}[type(node.op)](left, right)
         if isinstance(node, ast.Compare):
             assert len(node.ops) == len(node.comparators) == 1
             left, right = visit(node.left), visit(node.comparators[0])
@@ -158,7 +158,7 @@ def run(path, decode_table):
                 col = value(config(criterion, 'columnV2'), 'regularChoice')
                 assert all(r[col] is not None for r in rows)
                 rows.sort(key=lambda r: r[col], reverse=value(criterion, 'sortingOrder') == 'DESCENDING')
-        elif name in ('Table View', 'Line Plot'):
+        elif name in ('Table View', 'Line Plot', 'Generic JavaScript View'):
             rows = data[1]
             if name == 'Table View' and rows:
                 filt = config(config(config(settings, 'view'), 'displayedColumnsV2'), 'manualFilter')

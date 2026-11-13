@@ -10,10 +10,10 @@ Vier Teams bearbeiten parallel jeweils einen deutschen KNIME-Fall in drei Stunde
 | --- | --- | --- |
 | 1 | Merkmalskombinationen manuell prüfen und eine Historie ergänzen | [Merkmalsprüfung](https://github.com/DannyATPowerBI/KINMEathon/raw/refs/heads/main/workflows/01_Merkmalspruefung_AUFGABE.knwf) |
 | 2 | Erzeugte Wetterstunden mit Produktgrenzen und Lieferungen verbinden | [Wetterlogistik](https://github.com/DannyATPowerBI/KINMEathon/raw/refs/heads/main/workflows/02_Wetterlogistik_AUFGABE.knwf) |
-| 3 | Rechnungen mit Bestellungen und Wareneingängen abgleichen | [Rechnungsprüfung](https://github.com/DannyATPowerBI/KINMEathon/raw/refs/heads/main/workflows/03_Rechnungspruefung_AUFGABE.knwf) |
+| 3 | Montageaufträge als grafische Plantafel darstellen und den Schichtplan verbessern | [Fertigungsplanung](https://github.com/DannyATPowerBI/KINMEathon/raw/refs/heads/main/workflows/03_Fertigungsplanung_AUFGABE.knwf) |
 | 4 | Störungsmeldungen priorisieren, zuordnen und fachlich freigeben | [Störungsmeldungen](https://github.com/DannyATPowerBI/KINMEathon/raw/refs/heads/main/workflows/04_Stoerungsmeldungen_AUFGABE.knwf) |
 
-Die Dateien von Fall 1 und 4 sind unverändert. Die [Referenzflows](moderation/) liegen separat; das [Moderationspaket als ZIP](https://github.com/DannyATPowerBI/KINMEathon/raw/refs/heads/main/downloads/Moderation_vier_Referenzflows.zip) enthält alle vier Referenzflows.
+Die Dateien von Fall 1, 2 und 4 sind unverändert. Die [Referenzflows](moderation/) liegen separat; das [Moderationspaket als ZIP](https://github.com/DannyATPowerBI/KINMEathon/raw/refs/heads/main/downloads/Moderation_vier_Referenzflows.zip) enthält alle vier Referenzflows.
 
 ## In KNIME starten
 
@@ -25,13 +25,15 @@ Die Dateien von Fall 1 und 4 sind unverändert. Die [Referenzflows](moderation/)
 
 **Alle vier Fälle erzeugen ihre Daten im Flow.** Die Table Creator enthalten vollständig fiktive, wiederholbare Startbestände. Es werden keine zusätzlichen Eingabedateien, API-Zugänge oder Datenbankverbindungen benötigt. Ergebnisse bleiben als Tabellen und Ansichten im Flow; ein Dateiexport ist freiwillig.
 
-Aufgebaut für KNIME Analytics Platform 5.5.1 mit KNIME Base Nodes und KNIME Views. Prüfoberflächen in Fall 1 und 4 verwenden zusätzlich KNIME JavaScript Views und Quick Forms. Fall 3 verwendet Math Formula aus KNIME Math Expression (JEP). Die Aufgabenflows enthalten die Daten und Rohdatenansichten; die Referenzflows ergänzen die vollständige Verarbeitung.
+Aufgebaut für KNIME Analytics Platform 5.5.1 mit KNIME Base Nodes und KNIME Views. Prüfoberflächen in Fall 1 und 4 verwenden zusätzlich KNIME JavaScript Views und Quick Forms. Die vorbereitete Plantafel in Fall 3 nutzt ebenfalls KNIME JavaScript Views; JavaScript-Programmierung ist für das Team nicht erforderlich. Fall 3 verwendet Math Formula aus KNIME Math Expression (JEP). Die Aufgabenflows enthalten die Daten und Rohdatenansichten; die Referenzflows ergänzen die vollständige Verarbeitung.
 
 ## Fall 2 und 3
 
 **Fall 2 – Wetterfest liefern:** Zwölf Lieferungen, drei Produkte und 48 synthetische Wetterstunden. Schwerpunkt: Left Joins, produktabhängige Grenzen, fehlende Werte, Dispoliste und Feuchteverlauf. [Aufgaben und Kontrollwerte](docs/02_Wetterlogistik.md)
 
-**Fall 3 – Rechnungsprüfung:** 20 Rechnungspositionen, 15 Bestellpositionen und 17 Wareneingänge. Schwerpunkt: eindeutige Belege, Teillieferungen, kumulierte Mengen, Preis- und Rechenprüfung sowie eine nachvollziehbare Klärungsliste. [Aufgaben und Kontrollwerte](docs/03_Rechnungspruefung.md)
+**Fall 3 – Unsere nächste Schicht:** Zwölf Aufträge auf drei Montagezellen. Ein Join und zwei Formeln liefern die Daten für eine vorbereitete Gantt-Plantafel. Das Team ergänzt die Arbeitslast je Zelle und verbessert den Plan. Ergebnis: eine grafische Plantafel mit SVG-/HTML-Export und ein Vorher-nachher-Vergleich. [Aufgaben und Kontrollwerte](docs/03_Fertigungsplanung.md)
+
+![Vorschau der grafischen Plantafel aus Fall 3](docs/images/03_Plantafel.png)
 
 ## Gemeinsamer Ablauf
 
@@ -55,4 +57,6 @@ python3 tools/validate_workflows.py
 
 Die Prüfung benötigt ausschließlich die Python-Standardbibliothek. Sie kontrolliert Archive, XML, Verbindungen, intern erzeugte Daten, Fachregeln und ZIP-Inhalte. Sie rechnet die neuen Referenzgraphen für Fall 2 und 3 mit einem begrenzten lokalen Prüfmodell nach. [Kontrollwerte und Moderation](docs/Moderation.md)
 
-**KNIME-Import, native Node-Ausführung und interaktive Ansichten wurden hier nicht getestet.** Das lokale Prüfmodell ersetzt diesen Test nicht. Vor dem Termin auf den Teamgeräten importieren und ausführen.
+Die eingebettete Plantafel aus Fall 3 wurde in Chromium mit den berechneten Daten geprüft: Darstellung, SVG-/HTML-Export, verbesserter Plan und der Starthinweis im Aufgabenflow.
+
+**KNIME-Import und native Node-Ausführung wurden hier nicht getestet.** Die Browserprüfung und das lokale Prüfmodell ersetzen diesen Test nicht. Vor dem Termin auf den Teamgeräten importieren, ausführen und die interaktiven Ansichten öffnen.
